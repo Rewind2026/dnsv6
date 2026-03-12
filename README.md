@@ -52,28 +52,23 @@ version: '3.8'
 
 services:
   ddns:
-    build: .
+    image: rewind2030/dnsv6:latest
     container_name: ipv6-ddns
     restart: unless-stopped
-    
-    # 使用host网络模式（与宿主机同一网络）
+
+    # 使用 host 网络（必须）
     network_mode: host
-    
-    # 数据目录映射到宿主机（便于备份）
+
+    # 数据目录
     volumes:
       - ./data:/app/data
-    
+
+    # 基本配置（按需修改）
     environment:
+      - SUBDOMAIN=ipv6
       - PORT=5000
-    
-    # 健康检查（兼容Linux/Windows/Docker）
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/health 2>/dev/null || curl -fs http://localhost:5000/health 2>/dev/null || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    
+
+    # 日志限制
     logging:
       driver: "json-file"
       options:
