@@ -46,6 +46,8 @@ docker-compose ps
 docker-compose logs -f
 ```
 # 示例
+
+```
 version: '3.8'
 
 services:
@@ -78,7 +80,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
-
+```
 ### 3. 访问 Web 界面
 
 浏览器打开：`http://<宿主机IP>:5000`
