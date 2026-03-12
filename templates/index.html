@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPv6 DDNS 管理面板</title>
+    <!-- 使用单一可靠CDN (jsdelivr) 并锁定版本 -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/element-plus@2.5.6/dist/index.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@element-plus/icons-vue@2.3.1/dist/index.iife.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus@2.5.6/dist/index.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        /* CSS变量 - 支持暗黑模式 */
+        :root {
+            --bg-color: #f5f7fa;
+            --card-bg: #ffffff;
+            --text-primary: #303133;
+            --text-secondary: #606266;
+            --text-tertiary: #909399;
+            --border-color: #ebeef5;
+            --ip-bg: #f8f9fa;
+            --local-ip-bg: #f5f7fa;
+            --local-ip-hover: #e6f7ff;
+            --status-bar-bg: #f0f2f5;
+        }
+        
+        /* 暗黑模式 */
+        [data-theme="dark"] {
+            --bg-color: #1a1a2e;
+            --card-bg: #16213e;
+            --text-primary: #eaeaea;
+            --text-secondary: #a0a0a0;
+            --text-tertiary: #707070;
+            --border-color: #2d3748;
+            --ip-bg: #0f172a;
+            --local-ip-bg: #1e293b;
+            --local-ip-hover: #334155;
+            --status-bar-bg: #0f172a;
+        }
+        
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg-color); transition: background 0.3s ease; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4); }
+        .header h1 { font-size: 28px; margin-bottom: 8px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        
+        /* 卡片样式 - 等高 */
+        .card-row { display: flex; gap: 20px; margin-bottom: 20px; }
+        .card { background: var(--card-bg); border-radius: 12px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); flex: 1; display: flex; flex-direction: column; transition: background 0.3s ease; }
+        .card h3 { font-size: 18px; margin-bottom: 20px; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+        .card-content { flex: 1; }
+        .card-footer { margin-top: auto; padding-top: 16px; }
+        
+        /* 暗黑模式下的Element Plus覆盖 */
+        [data-theme="dark"] .el-table { background-color: var(--card-bg); color: var(--text-primary); }
+        [data-theme="dark"] .el-table th, [data-theme="dark"] .el-table td { background-color: var(--card-bg); border-color: var(--border-color); }
+        [data-theme="dark"] .el-table--striped .el-table__body tr.el-table__row--striped td { background-color: #1e293b; }
+        [data-theme="dark"] .el-dialog { background-color: var(--card-bg); }
+        [data-theme="dark"] .el-dialog__title { color: var(--text-primary); }
+        [data-theme="dark"] .el-form-item__label { color: var(--text-secondary); }
+        [data-theme="dark"] .el-input__inner { background-color: #0f172a; border-color: var(--border-color); color: var(--text-primary); }
+        [data-theme="dark"] .el-select-dropdown { background-color: var(--card-bg); border-color: var(--border-color); }
+        [data-theme="dark"] .el-select-dropdown__item { color: var(--text-primary); }
+        [data-theme="dark"] .el-select-dropdown__item.hover, [data-theme="dark"] .el-select-dropdown__item:hover { background-color: #1e293b; }
+        [data-theme="dark"] .el-tabs__item { color: var(--text-secondary); }
+        [data-theme="dark"] .el-tabs__item.is-active { color: #409EFF; }
+        [data-theme="dark"] .el-tabs__nav-wrap::after { background-color: var(--border-color); }
+        [data-theme="dark"] .el-tag { background-color: #1e293b; border-color: var(--border-color); color: var(--text-primary); }
+        
+        /* IP显示区域样式 */
+        .ip-display { background: var(--ip-bg); border-radius: 8px; padding: 16px; transition: background 0.3s ease; }
+        .ip-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-color); }
+        .ip-item:last-child { border-bottom: none; }
+        .ip-type { width: 60px; font-size: 14px; color: var(--text-secondary); font-weight: 500; }
+        .ip-value { flex: 1; font-family: 'Monaco', 'Consolas', 'Courier New', monospace; font-size: 16px; color: var(--text-primary); }
+        .ip-value.v4 { color: #409EFF; }
+        .ip-value.v6 { color: #67C23A; }
+        .ip-value.error { color: var(--text-tertiary); }
+        .ip-tag { margin-left: 12px; font-size: 12px; padding: 2px 8px; border-radius: 4px; }
+        .ip-tag.public { background: #e6f7ff; color: #1890ff; }
+        .ip-tag.local { background: #fff7e6; color: #fa8c16; }
+        .ip-tag.fail { background: var(--local-ip-bg); color: var(--text-tertiary); }
+        
+        /* 本机网卡地址 */
+        .local-ip-section { margin-top: 16px; padding: 12px; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color); }
+        .local-ip-title { font-size: 13px; color: var(--text-tertiary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .local-ip-list { display: flex; flex-direction: column; gap: 6px; }
+        .local-ip-item { font-family: 'Monaco', 'Consolas', monospace; font-size: 13px; color: var(--text-secondary); padding: 6px 10px; background: var(--local-ip-bg); border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+        .local-ip-item:hover { background: var(--local-ip-hover); color: #1890ff; }
+        
+        .btn-group { display: flex; gap: 12px; }
+        .btn-group .el-button { flex: 1; }
+        
+        .device-table { margin-top: 16px; }
+        .log-table { margin-top: 16px; }
+        .empty-tip { text-align: center; color: var(--text-tertiary); padding: 40px; }
+        .status-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: var(--status-bar-bg); border-radius: 8px; margin-bottom: 16px; transition: background 0.3s ease; }
+        .badge { padding: 4px 12px; border-radius: 4px; font-size: 12px; background: #f0f9ff; color: #409EFF; }
+        .ip-config-section { background: var(--ip-bg); padding: 16px; border-radius: 8px; margin-top: 12px; }
+        .ip-config-section + .ip-config-section { margin-top: 12px; }
+        
+        /* 登录遮罩 */
+        .login-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .login-box { background: var(--card-bg); padding: 40px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); width: 400px; text-align: center; }
+        .login-box h2 { margin-bottom: 30px; color: var(--text-primary); }
+        .login-box .el-form-item { margin-bottom: 20px; }
+        .login-box .el-button { width: 100%; margin-top: 10px; }
+        
+        .header-right { position: absolute; right: 20px; top: 20px; display: flex; gap: 10px; align-items: center; }
+        
+        /* ========== 移动端全面适配 ========== */
+        
+        /* 平板横屏 (1024px - 1200px) */
+        @media screen and (min-width: 1024px) and (max-width: 1200px) {
+            .container { max-width: 95%; }
+            .card-row { flex-wrap: wrap; }
+            .card { min-width: 45%; }
+        }
+        
+        /* 平板竖屏 (768px - 1023px) */
+        @media screen and (min-width: 768px) and (max-width: 1023px) {
+            .container { max-width: 95%; padding: 16px; }
+            .card-row { flex-direction: column; }
+            .card { min-width: 100%; }
+        }
+        
+        /* 大手机 (414px - 767px) - Plus/Max系列 */
+        @media screen and (min-width: 414px) and (max-width: 767px) {
+            * { -webkit-tap-highlight-color: transparent; }
+            html { font-size: 15px; }
+            body { font-size: 14px; -webkit-text-size-adjust: 100%; }
+            
+            .container { padding: 16px 12px; }
+            
+            .header { padding: 24px 16px; margin-bottom: 16px; border-radius: 12px; }
+            .header h1 { font-size: 1.5rem; }
+            .header p { font-size: 0.85rem; }
+            .header-right { position: static; margin-top: 16px; justify-content: center; flex-wrap: wrap; gap: 8px; }
+            .header-right .el-button { padding: 8px 12px; font-size: 0.85rem; }
+            
+            .card-row { flex-direction: column; gap: 12px; }
+            .card { padding: 16px; border-radius: 10px; }
+            .card h3 { font-size: 1.1rem; margin-bottom: 16px; }
+            
+            .ip-display { padding: 14px; border-radius: 8px; }
+            .ip-item { flex-direction: row; flex-wrap: wrap; padding: 10px 0; }
+            .ip-type { width: 50px; font-size: 0.8rem; }
+            .ip-value { flex: 1 1 60%; font-size: 0.9rem; word-break: break-all; min-width: 0; }
+            .ip-tag { margin-left: auto; font-size: 0.7rem; }
+            
+            .local-ip-section { padding: 12px; margin-top: 12px; }
+            .local-ip-title { font-size: 0.8rem; }
+            .local-ip-item { font-size: 0.8rem; padding: 8px 10px; }
+            
+            .btn-group { flex-direction: row; flex-wrap: wrap; gap: 10px; }
+            .btn-group .el-button { flex: 1 1 45%; min-height: 44px; }
+            
+            .status-bar { flex-wrap: wrap; gap: 8px; padding: 14px; }
+            
+            .el-dialog { width: 90% !important; max-width: 500px; margin: 20px auto !important; }
+            .el-form-item { margin-bottom: 16px; }
+            .el-form-item__label { font-size: 0.9rem; }
+            .el-input__inner { min-height: 44px; font-size: 0.95rem; }
+            
+            .el-table { font-size: 0.85rem; }
+            .el-table .cell { padding: 10px 6px; word-break: break-word; }
+            .el-table__header th, .el-table__body td { padding: 10px 6px; }
+            
+            .login-overlay { padding: 24px; }
+            .login-box { width: 100%; max-width: 400px; padding: 28px 24px; border-radius: 16px; }
+            .login-box h2 { font-size: 1.4rem; margin-bottom: 24px; }
+            
+            .el-tabs__item { font-size: 0.95rem; padding: 0 14px; height: 44px; line-height: 44px; }
+            .el-tabs__nav-wrap { overflow-x: auto; }
+        }
+        
+        /* 标准手机 (375px - 413px) - 普通iPhone */
+        @media screen and (min-width: 375px) and (max-width: 413px) {
+            * { -webkit-tap-highlight-color: transparent; }
+            html { font-size: 14px; }
+            body { font-size: 14px; -webkit-text-size-adjust: 100%; }
+            
+            .container { padding: 12px 10px; }
+            
+            .header { padding: 20px 14px; margin-bottom: 14px; border-radius: 10px; }
+            .header h1 { font-size: 1.35rem; }
+            .header p { font-size: 0.8rem; }
+            .header-right { position: static; margin-top: 14px; justify-content: center; gap: 6px; }
+            .header-right .el-button { padding: 6px 10px; font-size: 0.8rem; }
+            
+            .card-row { flex-direction: column; gap: 10px; }
+            .card { padding: 14px; border-radius: 8px; }
+            .card h3 { font-size: 1rem; margin-bottom: 12px; }
+            
+            .ip-display { padding: 12px; border-radius: 6px; }
+            .ip-item { flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px 0; }
+            .ip-type { width: auto; font-size: 0.75rem; }
+            .ip-value { font-size: 0.85rem; word-break: break-all; }
+            .ip-tag { margin-left: 0; margin-top: 4px; }
+            
+            .local-ip-section { padding: 10px; margin-top: 10px; }
+            .local-ip-title { font-size: 0.75rem; }
+            .local-ip-list { gap: 4px; }
+            .local-ip-item { font-size: 0.75rem; padding: 6px 8px; }
+            
+            .btn-group { flex-direction: column; gap: 8px; }
+            .btn-group .el-button { width: 100%; min-height: 44px; }
+            
+            .status-bar { flex-direction: column; gap: 6px; padding: 12px; }
+            
+            .el-dialog { width: 92% !important; max-width: 450px; margin: 16px auto !important; padding: 0; }
+            .el-dialog__header { padding: 16px; }
+            .el-dialog__body { padding: 16px; }
+            .el-form-item { margin-bottom: 14px; }
+            .el-form-item__label { font-size: 0.85rem; }
+            .el-input__inner { min-height: 44px; font-size: 0.9rem; padding: 0 12px; }
+            .el-select { width: 100% !important; }
+            
+            .el-table { font-size: 0.8rem; }
+            .el-table .cell { padding: 8px 4px; word-break: break-word; }
+            .el-table__header th, .el-table__body td { padding: 8px 4px; }
+            
+            /* 表格横向滚动 */
+            .el-table__body-wrapper { overflow-x: auto; }
+            
+            .login-overlay { padding: 16px; }
+            .login-box { width: 100%; padding: 24px 20px; border-radius: 14px; }
+            .login-box h2 { font-size: 1.25rem; margin-bottom: 20px; }
+            
+            .el-tabs__item { font-size: 0.9rem; padding: 0 10px; height: 40px; line-height: 40px; }
+            
+            .el-switch { transform: scale(0.85); }
+            
+            .el-message { min-width: 200px; max-width: 90%; }
+        }
+        
+        /* 小手机 (320px - 374px) - SE/老款 */
+        @media screen and (min-width: 320px) and (max-width: 374px) {
+            * { -webkit-tap-highlight-color: transparent; }
+            html { font-size: 13px; }
+            body { font-size: 13px; -webkit-text-size-adjust: 100%; }
+            
+            .container { padding: 10px 8px; }
+            
+            .header { padding: 16px 12px; margin-bottom: 12px; border-radius: 8px; }
+            .header h1 { font-size: 1.2rem; }
+            .header p { font-size: 0.75rem; }
+            .header-right { position: static; margin-top: 12px; justify-content: center; gap: 4px; }
+            .header-right .el-button { padding: 5px 8px; font-size: 0.75rem; }
+            
+            .card-row { flex-direction: column; gap: 8px; }
+            .card { padding: 12px; border-radius: 6px; }
+            .card h3 { font-size: 0.95rem; margin-bottom: 10px; }
+            
+            .ip-display { padding: 10px; border-radius: 6px; }
+            .ip-item { flex-direction: column; align-items: flex-start; gap: 4px; padding: 6px 0; }
+            .ip-type { width: auto; font-size: 0.7rem; }
+            .ip-value { font-size: 0.8rem; word-break: break-all; }
+            .ip-tag { margin-left: 0; margin-top: 2px; font-size: 0.65rem; }
+            
+            .local-ip-section { padding: 8px; margin-top: 8px; }
+            .local-ip-title { font-size: 0.7rem; }
+            .local-ip-list { gap: 2px; }
+            .local-ip-item { font-size: 0.7rem; padding: 4px 6px; }
+            
+            .btn-group { flex-direction: column; gap: 6px; }
+            .btn-group .el-button { width: 100%; min-height: 44px; font-size: 0.9rem; }
+            
+            .status-bar { flex-direction: column; gap: 4px; padding: 10px; }
+            
+            .el-dialog { width: 94% !important; margin: 12px auto !important; }
+            .el-dialog__header { padding: 12px; }
+            .el-dialog__body { padding: 12px; }
+            .el-form-item { margin-bottom: 12px; }
+            .el-form-item__label { font-size: 0.8rem; }
+            .el-input__inner { min-height: 44px; font-size: 0.85rem; }
+            
+            .el-table { font-size: 0.75rem; }
+            .el-table .cell { padding: 6px 2px; }
+            
+            .login-overlay { padding: 12px; }
+            .login-box { width: 100%; padding: 20px 16px; border-radius: 12px; }
+            .login-box h2 { font-size: 1.1rem; margin-bottom: 16px; }
+            
+            .el-tabs__item { font-size: 0.85rem; padding: 0 8px; height: 36px; line-height: 36px; }
+            
+            .el-switch { transform: scale(0.8); }
+            
+            .el-message { min-width: 180px; max-width: 90%; font-size: 0.85rem; }
+        }
+        
+        /* 超小屏幕 (< 320px) */
+        @media screen and (max-width: 319px) {
+            html { font-size: 12px; }
+            .container { padding: 8px 6px; }
+            .header { padding: 12px 10px; }
+            .card { padding: 10px; }
+            .el-input__inner { min-height: 40px; }
+            .btn-group .el-button { min-height: 40px; }
+        }
+        
+        /* 折叠屏适配 */
+        @media screen and (min-width: 500px) and (max-width: 700px) and (aspect-ratio: 21/9) {
+            .container { padding: 14px; }
+            .header { padding: 18px 14px; }
+            .ip-value { font-size: 0.8rem; }
+        }
+        
+        /* 横屏模式 */
+        @media screen and (orientation: landscape) and (max-height: 500px) {
+            .header { padding: 12px 16px; }
+            .header h1 { font-size: 1.1rem; margin-bottom: 4px; }
+            .header p { display: none; }
+            .header-right { margin-top: 8px; }
+            .card-row { flex-direction: row; gap: 10px; }
+            .card { padding: 12px; }
+            .card h3 { font-size: 0.9rem; margin-bottom: 8px; }
+            .container { padding: 10px; }
+        }
+        
+        /* 安全区域 - iPhone X+ */
+        @supports (padding: max(0px)) {
+            @media screen and (max-width: 767px) {
+                .header-right { padding-left: max(0px, env(safe-area-inset-left)); }
+                .container { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+                .login-overlay { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
+            }
+        }
+        
+        /* 暗黑模式移动端优化 */
+        @media screen and (max-width: 767px) {
+            [data-theme="dark"] { font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 登录遮罩 -->
+        <div v-if="!isLoggedIn" class="login-overlay">
+            <div class="login-box">
+                <h2>🔐 登录管理面板</h2>
+                <el-form @submit.prevent="doLogin">
+                    <el-form-item>
+                        <el-input v-model="loginForm.username" placeholder="用户名" prefix-icon="User"></el-input>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-input v-model="loginForm.password" type="password" placeholder="密码" prefix-icon="Lock" @keyup.enter="doLogin"></el-input>
+                    </el-form-item>
+                    <el-button type="primary" @click="doLogin" :loading="loginLoading" style="width: 100%;">登 录</el-button>
+                </el-form>
+                <div style="margin-top: 20px; color: #909399; font-size: 12px;">
+                    首次登录将自动创建管理员账户
+                </div>
+            </div>
+        </div>
+
+        <div class="container" v-if="isLoggedIn">
+            <div class="header" style="position: relative;">
+                <h1>🌐 DDNS 管理中心</h1>
+                <p>IPv6 前缀自动识别与 DNS 记录动态同步</p>
+                <div class="header-right">
+                    <el-button size="small" @click="toggleTheme" :icon="themeMode === 'light' ? Sunny : themeMode === 'dark' ? Moon : Sunrise">
+                        {{ themeMode === 'light' ? '浅色' : themeMode === 'dark' ? '深色' : '自动' }}
+                    </el-button>
+                    <el-button size="small" @click="showSettings = true" :icon="Setting">设置</el-button>
+                    <el-button size="small" @click="logout" :icon="SwitchButton">退出</el-button>
+                </div>
+            </div>
+
+            <div class="card-row">
+                <div class="card">
+                    <h3>📡 当前IP</h3>
+                    <div class="card-content">
+                        <div class="ip-display">
+                            <div class="ip-item">
+                                <span class="ip-type">IPv4</span>
+                                <span class="ip-value v4" v-if="currentIpv4">{{ currentIpv4 }}</span>
+                                <span class="ip-value error" v-else-if="detecting">检测中...</span>
+                                <span class="ip-value error" v-else>未获取到地址</span>
+                                <span class="ip-tag public" v-if="currentIpv4">公网</span>
+                                <span class="ip-tag fail" v-else-if="!detecting">失败</span>
+                            </div>
+                            <div class="ip-item">
+                                <span class="ip-type">IPv6</span>
+                                <span class="ip-value v6" v-if="currentIpv6">{{ currentIpv6 }}::/64</span>
+                                <span class="ip-value error" v-else-if="detecting">检测中...</span>
+                                <span class="ip-value error" v-else>未获取到地址</span>
+                                <span class="ip-tag public" v-if="ipv6Source === 'public'">公网</span>
+                                <span class="ip-tag local" v-else-if="ipv6Source === 'local'">本地</span>
+                                <span class="ip-tag fail" v-else-if="!detecting">失败</span>
+                            </div>
+                        </div>
+                        
+                        <div class="local-ip-section" v-if="localIpv6.length > 0">
+                            <div class="local-ip-title">
+                                <el-icon><Monitor /></el-icon>
+                                本地网络接口 IPv6 地址 (点击复制)
+                            </div>
+                            <div class="local-ip-list">
+                                <div v-for="(ip, index) in localIpv6" :key="index" class="local-ip-item" @click="copyIp(ip)">
+                                    {{ ip }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="btn-group">
+                            <el-button type="primary" @click="detectIp" :loading="detecting" :icon="RefreshRight">
+                                {{ detecting ? '检测中...' : '重新检测' }}
+                            </el-button>
+                            <el-button type="success" @click="updateAll" :loading="updating" :icon="Upload">
+                                {{ updating ? '同步中...' : '立即同步' }}
+                            </el-button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3>⚙️ DNS配置</h3>
+                    <div class="card-content">
+                        <el-form label-width="100px" size="default">
+                            <el-form-item label="DNS服务商">
+                                <el-select v-model="config.provider" style="width: 100%;">
+                                    <el-option label="阿里云DNS" value="aliyun"></el-option>
+                                    <el-option label="Cloudflare" value="cloudflare"></el-option>
+                                </el-select>
+                            </el-form-item>
+                            <el-form-item label="AccessKey ID">
+                                <el-input v-model="config.access_key_id" type="password" show-password placeholder="请输入AccessKey ID"></el-input>
+                            </el-form-item>
+                            <el-form-item label="AccessKey Secret">
+                                <el-input v-model="config.access_key_secret" type="password" show-password placeholder="请输入AccessKey Secret"></el-input>
+                            </el-form-item>
+                            <el-form-item label="TTL(秒)">
+                                <el-input-number v-model="config.ttl" :min="60" :max="86400" style="width: 100%;"></el-input-number>
+                            </el-form-item>
+                        </el-form>
+                    </div>
+                    <div class="card-footer">
+                        <el-button type="primary" @click="saveConfig" :icon="Check" style="width: 100%;">保存配置</el-button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 20px;">
+                <div class="status-bar">
+                    <h3 style="margin: 0;">📱 设备列表</h3>
+                    <span class="badge">IPv6前缀自动拼接</span>
+                </div>
+                <el-button type="primary" @click="showAddDialog" :icon="Plus">新增设备</el-button>
+                <el-table :data="devices" style="width: 100%; margin-top: 16px;" stripe>
+                    <el-table-column prop="device_id" label="设备ID" width="120"></el-table-column>
+                    <el-table-column prop="suffix" label="IPv6后缀" min-width="180">
+                        <template #default="scope">
+                            <span style="font-family: monospace;">{{ scope.row.suffix || '无(完整IPv6)' }}</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="domain" label="域名" min-width="160"></el-table-column>
+                    <el-table-column prop="record_type" label="类型" width="80">
+                        <template #default="scope">
+                            <el-tag :type="scope.row.record_type === 'AAAA' ? 'success' : 'warning'">
+                                {{ scope.row.record_type }}
+                            </el-tag>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="ipv_type" label="IP类型" width="100">
+                        <template #default="scope">
+                            <el-tag type="info">{{ scope.row.ipv_type }}</el-tag>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="status" label="状态" width="80">
+                        <template #default="scope">
+                            <span v-if="scope.row.status === 'online'" style="color: #67C23A; font-size: 16px;">🟢</span>
+                            <span v-else-if="scope.row.status === 'updating'" style="color: #E6A23C; font-size: 16px;">🟡</span>
+                            <span v-else style="color: #909399; font-size: 16px;">🔴</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="enabled" label="启用" width="70">
+                        <template #default="scope">
+                            <el-switch v-model="scope.row.enabled" @change="toggleDevice(scope.row)"></el-switch>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="操作" width="240">
+                        <template #default="scope">
+                            <el-button size="small" type="primary" @click="editDevice(scope.row)">编辑</el-button>
+                            <el-button size="small" type="success" @click="updateNow(scope.row)" :loading="deviceUpdating[scope.row.id]">更新</el-button>
+                            <el-button size="small" type="danger" @click="deleteDevice(scope.row)" :loading="deleting[scope.row.id]">删除</el-button>
+                        </template>
+                    </el-table-column>
+                </el-table>
+                <div v-if="devices.length === 0" class="empty-tip">
+                    暂无设备配置，请点击「新增设备」进行添加
+                </div>
+            </div>
+
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>📋 更新日志</h3>
+                    <el-button type="danger" size="small" @click="clearLogs" :icon="Delete" :disabled="logs.length === 0">清除日志</el-button>
+                </div>
+                <el-table :data="logs" style="width: 100%; margin-top: 16px;" max-height="400">
+                    <el-table-column prop="created_at" label="时间" width="180">
+                        <template #default="scope">
+                            {{ formatDateTime(scope.row.created_at) }}
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="device_id" label="设备" width="100"></el-table-column>
+                    <el-table-column prop="domain" label="域名" width="160"></el-table-column>
+                    <el-table-column prop="old_ip" label="原解析地址" min-width="160">
+                        <template #default="scope">
+                            <span style="font-family: monospace; font-size: 12px;">{{ scope.row.old_ip || '-' }}</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="new_ip" label="更新后地址" min-width="160">
+                        <template #default="scope">
+                            <span style="font-family: monospace; font-size: 12px;">{{ scope.row.new_ip || '-' }}</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="record_type" label="类型" width="70"></el-table-column>
+                    <el-table-column prop="status" label="状态" width="80">
+                        <template #default="scope">
+                            <el-tag :type="scope.row.status === 'success' ? 'success' : 'danger'">
+                                {{ scope.row.status === 'success' ? '成功' : '失败' }}
+                            </el-tag>
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </div>
+        </div>
+
+        <el-dialog v-model="dialogVisible" :title="isEditing ? '编辑设备配置' : '新增设备配置'" width="550px">
+            <el-form :model="newDevice" label-width="100px">
+                <el-form-item label="设备ID" required>
+                    <el-input v-model="newDevice.device_id" placeholder="如: nas, camera, pc"></el-input>
+                </el-form-item>
+                <el-form-item label="完整域名" required>
+                    <el-input v-model="newDevice.domain" placeholder="如: nas.example.com"></el-input>
+                </el-form-item>
+                
+                <el-divider content-position="left">IP配置</el-divider>
+                
+                <el-form-item label="数据源" required>
+                    <el-radio-group v-model="newDevice.source_type" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                        <el-radio label="auto">
+                            <span>自动获取本机IP</span>
+                            <span style="color: #909399; font-size: 12px; margin-left: 8px;">自动检测当前公网IP</span>
+                        </el-radio>
+                        <el-radio label="domain">
+                            <span>从域名解析</span>
+                            <span style="color: #909399; font-size: 12px; margin-left: 8px;">从指定域名解析IP（适合异地DDNS）</span>
+                        </el-radio>
+                    </el-radio-group>
+                </el-form-item>
+                
+                <el-form-item v-if="newDevice.source_type === 'domain'" label="源域名" required>
+                    <el-input v-model="newDevice.source_domain" placeholder="如: home.example.com"></el-input>
+                    <div style="color: #909399; font-size: 12px; margin-top: 4px;">
+                        填写需要解析的域名，系统将定期查询该域名的IP并更新到目标记录
+                    </div>
+                </el-form-item>
+                
+                <el-form-item label="IP类型" required>
+                    <el-radio-group v-model="newDevice.ipv_type" @change="onIpTypeChange">
+                        <el-radio-button label="ipv6">仅IPv6</el-radio-button>
+                        <el-radio-button label="ipv4">仅IPv4</el-radio-button>
+                        <el-radio-button label="both">同时支持</el-radio-button>
+                    </el-radio-group>
+                </el-form-item>
+                
+                <!-- IPv6配置 -->
+                <div v-if="newDevice.ipv_type === 'ipv6' || newDevice.ipv_type === 'both'" class="ip-config-section">
+                    <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                        <el-tag type="success" size="large">AAAA</el-tag>
+                        <span style="color: #303133; font-weight: 500; margin-left: 8px;">IPv6记录</span>
+                    </div>
+                    <el-form-item label="IPv6地址">
+                        <el-radio-group v-model="newDevice.ipv6_mode" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                            <el-radio label="auto">
+                                <span>自动拼接前缀+后缀</span>
+                                <span style="color: #909399; font-size: 12px; margin-left: 8px;">使用当前检测到的IPv6前缀</span>
+                            </el-radio>
+                            <el-radio label="manual">
+                                <span>手动指定完整IPv6</span>
+                            </el-radio>
+                        </el-radio-group>
+                    </el-form-item>
+                    <el-form-item v-if="newDevice.ipv6_mode === 'auto'" label="IPv6后缀">
+                        <el-input v-model="newDevice.suffix" placeholder="如: 1873:99ec:ef23:7b56"></el-input>
+                        <div style="color: #909399; font-size: 12px; margin-top: 4px;">
+                            留空则使用本机完整IPv6地址
+                        </div>
+                    </el-form-item>
+                    <el-form-item v-if="newDevice.ipv6_mode === 'manual'" label="完整IPv6">
+                        <el-input v-model="newDevice.manual_ipv6" placeholder="如: 2408:822e:8a7:40f0:1873:99ec:ef23:7b56" style="width: 100%;"></el-input>
+                    </el-form-item>
+                </div>
+                
+                <!-- IPv4配置 -->
+                <div v-if="newDevice.ipv_type === 'ipv4' || newDevice.ipv_type === 'both'" class="ip-config-section">
+                    <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                        <el-tag type="warning" size="large">A</el-tag>
+                        <span style="color: #303133; font-weight: 500; margin-left: 8px;">IPv4记录</span>
+                    </div>
+                    <el-form-item label="IPv4地址">
+                        <el-radio-group v-model="newDevice.ipv4_mode" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                            <el-radio label="auto">
+                                <span>自动获取本机IPv4</span>
+                                <span style="color: #909399; font-size: 12px; margin-left: 8px;">使用当前检测到的公网IPv4</span>
+                            </el-radio>
+                            <el-radio label="manual">
+                                <span>手动指定IPv4</span>
+                            </el-radio>
+                        </el-radio-group>
+                    </el-form-item>
+                    <el-form-item v-if="newDevice.ipv4_mode === 'manual'" label=" ">
+                        <el-input v-model="newDevice.manual_ipv4" placeholder="如: 192.168.1.100 或公网IP" style="width: 100%;"></el-input>
+                    </el-form-item>
+                </div>
+                
+                <!-- 同时支持时的说明 -->
+                <el-alert
+                    v-if="newDevice.ipv_type === 'both'"
+                    title="同时支持说明"
+                    type="info"
+                    :closable="false"
+                    style="margin-top: 12px;"
+                >
+                    <div style="font-size: 12px; line-height: 1.6;">
+                        系统将为该域名同时创建两条DNS记录：<br>
+                        • AAAA记录：{{ newDevice.ipv6_mode === 'auto' ? '自动拼接前缀+后缀' : '使用手动指定的IPv6: ' + (newDevice.manual_ipv6 || '未填写') }}<br>
+                        • A记录：{{ newDevice.ipv4_mode === 'auto' ? '使用本机IPv4地址' : '使用手动指定的IPv4: ' + (newDevice.manual_ipv4 || '未填写') }}
+                    </div>
+                </el-alert>
+            </el-form>
+            <template #footer>
+                <el-button @click="dialogVisible = false">取消</el-button>
+                <el-button type="primary" @click="isEditing ? saveEditDevice() : addDevice()">
+                    {{ isEditing ? '保存' : '确定' }}
+                </el-button>
+            </template>
+        </el-dialog>
+
+        <!-- 设置对话框 -->
+        <el-dialog v-model="showSettings" title="⚙️ 系统设置" width="500px">
+            <el-tabs v-model="settingsTab">
+                <el-tab-pane label="基本设置" name="basic">
+                    <el-form label-width="120px">
+                        <el-form-item label="检测间隔">
+                            <el-select v-model="settings.update_interval" style="width: 100%;">
+                                <el-option :value="60" label="1分钟"></el-option>
+                                <el-option :value="180" label="3分钟"></el-option>
+                                <el-option :value="300" label="5分钟"></el-option>
+                                <el-option :value="600" label="10分钟"></el-option>
+                                <el-option :value="900" label="15分钟"></el-option>
+                            </el-select>
+                        </el-form-item>
+                        <el-form-item label="访问状态">
+                            <div style="font-size: 12px; color: #606266;">
+                                <div>当前IP: {{ settings.client_ip }}</div>
+                                <div>内网IP: {{ settings.is_private ? '是' : (settings.is_same_segment ? '是(同网段)' : '否') }}</div>
+                                <div>已登录: {{ settings.is_logged_in ? '是' : '否' }}</div>
+                                <div>可修改: {{ settings.can_modify ? '是' : '否' }}</div>
+                            </div>
+                        </el-form-item>
+                        <el-form-item label="允许公网访问">
+                            <el-switch v-model="settings.allow_public_access" :disabled="!settings.can_modify && settings.allow_public_access"></el-switch>
+                            <div style="color: #909399; font-size: 12px; margin-top: 4px;">
+                                关闭时只允许内网或同网段访问，开启后允许公网访问
+                            </div>
+                        </el-form-item>
+                        <el-form-item label="IP白名单">
+                            <el-input v-model="settings.ip_whitelist" placeholder="如: 1.2.3.4, 5.6.7.0/24" :disabled="!settings.can_modify"></el-input>
+                            <div style="color: #909399; font-size: 12px; margin-top: 4px;">
+                                逗号分隔，支持单个IP或CIDR网段（如 1.2.3.4, 10.0.0.0/8）
+                            </div>
+                        </el-form-item>
+                    </el-form>
+                </el-tab-pane>
+                <el-tab-pane label="通知设置" name="notify">
+                    <el-form label-width="100px">
+                        <el-form-item label="启用通知">
+                            <el-switch v-model="notifyConfig.enabled"></el-switch>
+                        </el-form-item>
+                        <el-form-item label="SendKey">
+                            <el-input v-model="notifyConfig.send_key" placeholder="Server酱的SendKey" :disabled="!notifyConfig.enabled"></el-input>
+                            <div style="color: #909399; font-size: 12px; margin-top: 4px;">
+                                访问 <a href="https://sct.ftqq.com/" target="_blank">sct.ftqq.com</a> 获取 SendKey
+                            </div>
+                        </el-form-item>
+                        <el-form-item label="成功通知">
+                            <el-switch v-model="notifyConfig.notify_on_success" :disabled="!notifyConfig.enabled"></el-switch>
+                        </el-form-item>
+                        <el-form-item label="失败通知">
+                            <el-switch v-model="notifyConfig.notify_on_failure" :disabled="!notifyConfig.enabled"></el-switch>
+                        </el-form-item>
+                        <el-form-item>
+                            <el-button @click="testNotify" :disabled="!notifyConfig.enabled">测试通知</el-button>
+                        </el-form-item>
+                    </el-form>
+                </el-tab-pane>
+                <el-tab-pane label="安全设置" name="security">
+                    <el-form label-width="100px">
+                        <el-form-item label="旧密码">
+                            <el-input v-model="passwordForm.old_password" type="password" placeholder="请输入当前密码"></el-input>
+                        </el-form-item>
+                        <el-form-item label="新密码">
+                            <el-input v-model="passwordForm.new_password" type="password" placeholder="请输入新密码（至少6位）"></el-input>
+                        </el-form-item>
+                        <el-form-item label="确认密码">
+                            <el-input v-model="passwordForm.confirm_password" type="password" placeholder="请再次输入新密码"></el-input>
+                        </el-form-item>
+                        <el-form-item>
+                            <el-button type="primary" @click="changePassword">修改密码</el-button>
+                        </el-form-item>
+                    </el-form>
+                </el-tab-pane>
+            </el-tabs>
+            <template #footer>
+                <el-button @click="showSettings = false">取消</el-button>
+                <el-button type="primary" @click="saveSettings">保存设置</el-button>
+            </template>
+        </el-dialog>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, reactive, watch } = Vue;
+        const { ElMessage, ElMessageBox } = ElementPlus;
+        const { RefreshRight, Upload, Check, Plus, Monitor, Setting, SwitchButton, User, Lock, Delete, Sunny, Moon, Sunrise } = ElementPlusIconsVue;
+
+        const app = createApp({
+            setup() {
+                // 登录相关
+                const isLoggedIn = ref(false);
+                const loginForm = reactive({ username: '', password: '' });
+                const loginLoading = ref(false);
+                
+                // 主题相关
+                const themeMode = ref('light'); // 'light', 'dark', 'auto'
+                
+                // 获取日落时间（简化版：根据月份估算）
+                const getSunsetTime = () => {
+                    const now = new Date();
+                    const month = now.getMonth() + 1; // 1-12
+                    // 粗略估算：夏季日落晚（19-20点），冬季日落早（17-18点）
+                    if (month >= 5 && month <= 8) {
+                        return { hour: 19, minute: 30 }; // 夏季
+                    } else if (month >= 11 || month <= 2) {
+                        return { hour: 17, minute: 30 }; // 冬季
+                    } else {
+                        return { hour: 18, minute: 30 }; // 春秋
+                    }
+                };
+                
+                // 检查是否应该使用暗黑模式（自动模式）
+                const shouldUseDarkMode = () => {
+                    const now = new Date();
+                    const sunset = getSunsetTime();
+                    const sunrise = { hour: 6, minute: 30 }; // 日出时间固定
+                    
+                    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                    const sunsetMinutes = sunset.hour * 60 + sunset.minute;
+                    const sunriseMinutes = sunrise.hour * 60 + sunrise.minute;
+                    
+                    // 日落到日出之间是夜晚
+                    return currentMinutes >= sunsetMinutes || currentMinutes < sunriseMinutes;
+                };
+                
+                // 应用主题
+                const applyTheme = () => {
+                    let isDark = false;
+                    if (themeMode.value === 'dark') {
+                        isDark = true;
+                    } else if (themeMode.value === 'auto') {
+                        isDark = shouldUseDarkMode();
+                    }
+                    
+                    if (isDark) {
+                        document.documentElement.setAttribute('data-theme', 'dark');
+                    } else {
+                        document.documentElement.removeAttribute('data-theme');
+                    }
+                };
+                
+                // 主题模式列表（放在函数外部避免重复创建）
+                const themeModes = ['light', 'dark', 'auto'];
+                
+                // 切换主题
+                const toggleTheme = () => {
+                    const currentIndex = themeModes.indexOf(themeMode.value);
+                    themeMode.value = themeModes[(currentIndex + 1) % themeModes.length];
+                    localStorage.setItem('themeMode', themeMode.value);
+                    applyTheme();
+                    // 使用nextTick确保DOM更新后再显示消息
+                    Vue.nextTick(() => {
+                        ElMessage.success(`已切换到${themeMode.value === 'light' ? '浅色' : themeMode.value === 'dark' ? '深色' : '自动'}模式`);
+                    });
+                };
+                
+                // 初始化主题
+                const initTheme = () => {
+                    const saved = localStorage.getItem('themeMode');
+                    if (saved && ['light', 'dark', 'auto'].includes(saved)) {
+                        themeMode.value = saved;
+                    }
+                    applyTheme();
+                };
+                
+                // 设置相关
+                const showSettings = ref(false);
+                const settingsTab = ref('basic');
+                const settings = reactive({ update_interval: 180, allow_public_access: false });
+                const notifyConfig = reactive({
+                    enabled: false,
+                    notifier_type: 'serverchan',
+                    send_key: '',
+                    notify_on_success: true,
+                    notify_on_failure: true
+                });
+                
+                // 编辑相关
+                const isEditing = ref(false);
+                const editingDeviceId = ref(null);
+                
+                // 密码修改表单
+                const passwordForm = reactive({
+                    old_password: '',
+                    new_password: '',
+                    confirm_password: ''
+                });
+                
+                // 主应用数据
+                const currentIpv4 = ref('');
+                const currentIpv6 = ref('');
+                const localIpv6 = ref([]);
+                const ipv6Source = ref('');
+                const detecting = ref(false);
+                const updating = ref(false);
+                const deviceUpdating = ref({}); // 单个设备更新状态
+                const deleting = ref({}); // 设备删除状态
+                const config = reactive({
+                    provider: 'aliyun',
+                    access_key_id: '',
+                    access_key_secret: '',
+                    ttl: 600
+                });
+                const devices = ref([]);
+                const logs = ref([]);
+                const dialogVisible = ref(false);
+                const newDevice = reactive({
+                    device_id: '',
+                    suffix: '',
+                    domain: '',
+                    record_type: 'AAAA',
+                    ipv_type: 'ipv6',
+                    ipv6_mode: 'auto',
+                    manual_ipv6: '',
+                    ipv4_mode: 'auto',
+                    manual_ipv4: '',
+                    source_type: 'auto',
+                    source_domain: '',
+                    enabled: true
+                });
+
+
+                // 登录相关方法
+                const checkAuth = async () => {
+                    try {
+                        const res = await fetch('/api/auth/check');
+                        const data = await res.json();
+                        isLoggedIn.value = data.logged_in;
+                    } catch (e) {
+                        isLoggedIn.value = false;
+                    }
+                };
+                
+                const doLogin = async () => {
+                    console.log('doLogin called');
+                    if (!loginForm.username || !loginForm.password) {
+                        console.log('Empty username or password');
+                        ElMessage.warning('请输入用户名和密码');
+                        return;
+                    }
+                    loginLoading.value = true;
+                    try {
+                        console.log('Sending request...');
+                        const res = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                username: loginForm.username,
+                                password: loginForm.password
+                            })
+                        });
+                        console.log('Response:', res.status);
+                        const data = await res.json();
+                        console.log('Data:', data);
+                        if (data.success) {
+                            isLoggedIn.value = true;
+                            ElMessage.success(data.message || '登录成功');
+                            // 清空密码（安全考虑）
+                            loginForm.password = '';
+                            // 使用 nextTick 确保 DOM 更新后再加载数据
+                            Vue.nextTick(async () => {
+                                try {
+                                    await detectIp();
+                                    await loadDevices();
+                                    await loadLogs();
+                                    await loadConfig();
+                                    await loadSettings();
+                                } catch (error) {
+                                    console.error('数据加载失败:', error);
+                                    ElMessage.warning('部分数据加载失败，请刷新页面重试');
+                                }
+                            });
+                        } else {
+                            console.log('Calling ElMessage.error with:', data.message);
+                            ElMessage.error({
+                                message: data.message || '登录失败，请检查用户名和密码',
+                                duration: 3000,
+                                showClose: true
+                            });
+                            console.log('ElMessage.error called');
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        ElMessage.error('登录请求失败: ' + error.message);
+                    } finally {
+                        loginLoading.value = false;
+                    }
+                };
+                
+                const logout = async () => {
+                    try {
+                        await fetch('/api/auth/logout', { method: 'POST' });
+                    } catch (e) {
+                        console.error('Logout error:', e);
+                    }
+                    isLoggedIn.value = false;
+                    // 清空登录表单
+                    loginForm.username = '';
+                    loginForm.password = '';
+                    // 清空其他敏感数据
+                    passwordForm.old_password = '';
+                    passwordForm.new_password = '';
+                    passwordForm.confirm_password = '';
+                };
+                
+                // 设置相关方法
+                const loadSettings = async () => {
+                    try {
+                        const res = await fetch('/api/settings');
+                        if (!res.ok) throw new Error('加载设置失败');
+                        const data = await res.json();
+                        settings.update_interval = data.update_interval || 180;
+                        settings.allow_public_access = !!data.allow_public_access;
+                        settings.ip_whitelist = data.ip_whitelist || '';
+                        settings.can_modify = data.can_modify !== false;
+                        settings.client_ip = data.client_ip || '';
+                        settings.is_private = data.is_private || false;
+                        settings.is_same_segment = data.is_same_segment || false;
+                        settings.is_logged_in = data.is_logged_in || false;
+                        
+                        // 加载通知配置
+                        const notifyRes = await fetch('/api/notify/config');
+                        if (!notifyRes.ok) throw new Error('加载通知配置失败');
+                        const notifyData = await notifyRes.json();
+                        notifyConfig.enabled = !!notifyData.enabled;
+                        notifyConfig.notifier_type = notifyData.notifier_type || 'serverchan';
+                        notifyConfig.send_key = notifyData.send_key || '';
+                        notifyConfig.notify_on_success = notifyData.notify_on_success !== 0 && notifyData.notify_on_success !== false;
+                        notifyConfig.notify_on_failure = notifyData.notify_on_failure !== 0 && notifyData.notify_on_failure !== false;
+                    } catch (error) {
+                        console.error('加载设置失败:', error);
+                        ElMessage.warning('加载设置失败，使用默认配置');
+                    }
+                };
+                
+                const saveSettings = async () => {
+                    if (!settings.can_modify) {
+                        ElMessage.warning('您没有权限修改设置');
+                        return;
+                    }
+                    
+                    try {
+                        // 准备要发送的数据
+                        const settingsData = {
+                            update_interval: settings.update_interval,
+                            allow_public_access: settings.allow_public_access,
+                            ip_whitelist: settings.ip_whitelist
+                        };
+                        
+                        // 保存基本设置
+                        const settingsRes = await fetch('/api/settings', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(settingsData)
+                        });
+                        const settingsResult = await settingsRes.json();
+                        if (!settingsRes.ok || !settingsResult.success) {
+                            throw new Error(settingsResult.message || '保存基本设置失败');
+                        }
+                        
+                        // 保存通知配置
+                        const notifyRes = await fetch('/api/notify/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(notifyConfig)
+                        });
+                        if (!notifyRes.ok) throw new Error('保存通知配置失败');
+                        
+                        showSettings.value = false;
+                        ElMessage.success('设置已保存');
+                        loadSettings(); // 重新加载以更新权限状态
+                    } catch (error) {
+                        console.error('保存设置失败:', error);
+                        ElMessage.error('保存设置失败: ' + error.message);
+                    }
+                };
+                
+                const testNotify = async () => {
+                    if (!notifyConfig.enabled) {
+                        ElMessage.warning('请先启用通知');
+                        return;
+                    }
+                    const res = await fetch('/api/notify/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(notifyConfig)
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        ElMessage.success(data.message);
+                    } else {
+                        ElMessage.error(data.message);
+                    }
+                };
+
+                const changePassword = async () => {
+                    if (!passwordForm.old_password || !passwordForm.new_password || !passwordForm.confirm_password) {
+                        ElMessage.warning('请填写所有密码字段');
+                        return;
+                    }
+                    if (passwordForm.new_password !== passwordForm.confirm_password) {
+                        ElMessage.warning('两次输入的新密码不一致');
+                        return;
+                    }
+                    if (passwordForm.new_password.length < 6) {
+                        ElMessage.warning('新密码长度至少6位');
+                        return;
+                    }
+                    const res = await fetch('/api/auth/change-password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            old_password: passwordForm.old_password,
+                            new_password: passwordForm.new_password
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        ElMessage.success(data.message);
+                        // 清空表单
+                        passwordForm.old_password = '';
+                        passwordForm.new_password = '';
+                        passwordForm.confirm_password = '';
+                    } else {
+                        ElMessage.error(data.message);
+                    }
+                };
+
+
+                const copyIp = (ip) => {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(ip).then(() => {
+                            ElMessage.success('已复制: ' + ip);
+                        }).catch(() => {
+                            fallbackCopy(ip);
+                        });
+                    } else {
+                        fallbackCopy(ip);
+                    }
+                };
+
+                const fallbackCopy = (text) => {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand('copy');
+                        ElMessage.success('已复制: ' + text);
+                    } catch (e) {
+                        ElMessage.error('复制失败，请手动复制');
+                    }
+                    document.body.removeChild(textarea);
+                };
+
+                const detectIp = async () => {
+                    detecting.value = true;
+                    ipv6Source.value = '';
+                    try {
+                        const res = await fetch('/api/ip/detect');
+                        const data = await res.json();
+                        currentIpv4.value = data.ipv4 || '';
+                        currentIpv6.value = data.ipv6 || '';
+                        localIpv6.value = data.ipv6_local || [];
+                        
+                        if (data.ipv6_public) ipv6Source.value = 'public';
+                        else if (data.ipv6) ipv6Source.value = 'local';
+                    } catch (e) {
+                        currentIpv4.value = '';
+                        currentIpv6.value = '';
+                    } finally {
+                        detecting.value = false;
+                    }
+                };
+
+                const saveConfig = async () => {
+                    try {
+                        await fetch('/api/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(config)
+                        });
+                        ElMessage.success('配置已保存');
+                    } catch (e) {
+                        ElMessage.error('保存失败');
+                    }
+                };
+
+                const loadDevices = async () => {
+                    try {
+                        const res = await fetch('/api/devices');
+                        if (!res.ok) throw new Error('加载设备失败');
+                        const data = await res.json();
+                        // 将 enabled 从整数转换为布尔值
+                        devices.value = data.map(device => ({
+                            ...device,
+                            enabled: Boolean(device.enabled)
+                        }));
+                    } catch (error) {
+                        console.error('加载设备失败:', error);
+                        devices.value = [];
+                        ElMessage.warning('加载设备列表失败');
+                    }
+                };
+
+                const loadLogs = async () => {
+                    try {
+                        const res = await fetch('/api/logs?limit=50');
+                        if (!res.ok) throw new Error('加载日志失败');
+                        logs.value = await res.json();
+                    } catch (error) {
+                        console.error('加载日志失败:', error);
+                        logs.value = [];
+                    }
+                };
+
+                const clearLogs = async () => {
+                    try {
+                        await ElMessageBox.confirm(
+                            '确定要清除所有日志吗？此操作不可恢复。',
+                            '确认清除',
+                            {
+                                confirmButtonText: '确定',
+                                cancelButtonText: '取消',
+                                type: 'warning',
+                            }
+                        );
+                        
+                        const res = await fetch('/api/logs', { method: 'DELETE' });
+                        const data = await res.json();
+                        
+                        if (data.success) {
+                            ElMessage.success('日志已清除');
+                            loadLogs();
+                        } else {
+                            ElMessage.error('清除日志失败');
+                        }
+                    } catch (error) {
+                        // 用户取消操作或关闭对话框
+                        if (error === 'cancel' || error?.message?.includes('cancel')) {
+                            return; // 静默处理取消操作
+                        }
+                        console.error('清除日志失败:', error);
+                        ElMessage.error('清除日志失败: ' + (error.message || '未知错误'));
+                    }
+                };
+
+                // 格式化日期时间（处理UTC时间）
+                const formatDateTime = (dateStr) => {
+                    if (!dateStr) return '-';
+                    try {
+                        let date;
+                        // 处理多种日期格式
+                        if (dateStr.includes('T') && dateStr.includes(':')) {
+                            // ISO格式: 2026-03-07T08:31:24 或 2026-03-07T08:31:24.123456
+                            const cleanStr = dateStr.split('.')[0]; // 去掉毫秒
+                            date = new Date(cleanStr + 'Z');
+                        } else if (dateStr.includes(' ')) {
+                            // 空格分隔: 2026-03-07 08:31:24
+                            date = new Date(dateStr.replace(' ', 'T') + 'Z');
+                        } else {
+                            // 其他格式直接尝试
+                            date = new Date(dateStr);
+                        }
+                        // 检查是否有效
+                        if (isNaN(date.getTime())) return dateStr;
+                        // 转换为本地时间
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const hours = String(date.getHours()).padStart(2, '0');
+                        const minutes = String(date.getMinutes()).padStart(2, '0');
+                        const seconds = String(date.getSeconds()).padStart(2, '0');
+                        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+                    } catch (e) {
+                        return dateStr;
+                    }
+                };
+
+                const loadConfig = async () => {
+                    try {
+                        const res = await fetch('/api/config');
+                        if (!res.ok) throw new Error('加载配置失败');
+                        const data = await res.json();
+                        if (data.provider) {
+                            config.provider = data.provider;
+                            config.access_key_id = data.access_key_id || '';
+                            config.access_key_secret = '';
+                            config.ttl = data.ttl || 600;
+                        }
+                    } catch (error) {
+                        console.error('加载配置失败:', error);
+                        ElMessage.warning('加载DNS配置失败');
+                    }
+                };
+
+                const showAddDialog = () => {
+                    isEditing.value = false;
+                    editingDeviceId.value = null;
+                    Object.assign(newDevice, {
+                        device_id: '',
+                        suffix: '',
+                        domain: '',
+                        record_type: 'AAAA',
+                        ipv_type: 'ipv6',
+                        ipv6_mode: 'auto',
+                        manual_ipv6: '',
+                        ipv4_mode: 'auto',
+                        manual_ipv4: '',
+                        source_type: 'auto',
+                        source_domain: '',
+                        enabled: true
+                    });
+                    dialogVisible.value = true;
+                };
+
+                const editDevice = (device) => {
+                    isEditing.value = true;
+                    editingDeviceId.value = device.id;
+                    Object.assign(newDevice, {
+                        device_id: device.device_id,
+                        suffix: device.suffix || '',
+                        domain: device.domain,
+                        record_type: device.record_type || 'AAAA',
+                        ipv_type: device.ipv_type || 'ipv6',
+                        ipv6_mode: device.ipv6_mode || 'auto',
+                        manual_ipv6: device.manual_ipv6 || '',
+                        ipv4_mode: device.ipv4_mode || 'auto',
+                        manual_ipv4: device.manual_ipv4 || '',
+                        source_type: device.source_type || 'auto',
+                        source_domain: device.source_domain || ''
+                    });
+                    dialogVisible.value = true;
+                };
+
+                const saveEditDevice = async () => {
+                    if (!newDevice.device_id || !newDevice.domain) {
+                        ElMessage.warning('请填写设备ID和域名');
+                        return;
+                    }
+                    if (newDevice.source_type === 'domain' && !newDevice.source_domain) {
+                        ElMessage.warning('请填写源域名');
+                        return;
+                    }
+                    await fetch(`/api/devices/${editingDeviceId.value}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newDevice)
+                    });
+                    dialogVisible.value = false;
+                    loadDevices();
+                    ElMessage.success('设备配置已更新');
+                };
+
+                const onIpTypeChange = (type) => {
+                    // 确保切换到任何类型时都初始化 ipv6_mode
+                    if (!newDevice.ipv6_mode) {
+                        newDevice.ipv6_mode = 'auto';
+                    }
+                    if (!newDevice.ipv4_mode) {
+                        newDevice.ipv4_mode = 'auto';
+                    }
+                    
+                    if (type === 'ipv4') {
+                        newDevice.record_type = 'A';
+                        newDevice.suffix = '';
+                    } else if (type === 'ipv6') {
+                        newDevice.record_type = 'AAAA';
+                    } else {
+                        // both - 默认用AAAA，但后端会处理同时创建
+                        newDevice.record_type = 'AAAA';
+                    }
+                };
+
+                const addDevice = async () => {
+                    if (!newDevice.device_id || !newDevice.domain) {
+                        ElMessage.warning('请填写设备ID和域名');
+                        return;
+                    }
+                    if (newDevice.source_type === 'domain' && !newDevice.source_domain) {
+                        ElMessage.warning('请填写源域名');
+                        return;
+                    }
+                    // 添加设备，不自动更新
+                    const res = await fetch('/api/devices', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newDevice)
+                    });
+                    const result = await res.json();
+                    dialogVisible.value = false;
+                    loadDevices();
+                    
+                    if (result.id) {
+                        ElMessage.success('设备配置已保存，请手动点击更新按钮进行同步');
+                    } else {
+                        ElMessage.success('设备配置已保存');
+                    }
+                };
+                
+                // 更新指定设备
+                const updateDeviceById = async (deviceId) => {
+                    updating.value = true;
+                    try {
+                        const res = await fetch(`/api/devices/${deviceId}/update`, { method: 'POST' });
+                        const data = await res.json();
+                        
+                        if (data.error) {
+                            ElMessage.error(data.error);
+                            updating.value = false;
+                            return;
+                        }
+                        
+                        // 检查更新结果
+                        let updated = false;
+                        let failed = false;
+                        let message = '';
+                        
+                        for (const r_type of ['ipv4', 'ipv6']) {
+                            const typeResults = data.results?.[r_type];
+                            if (typeResults?.updated?.length > 0) {
+                                updated = true;
+                                const item = typeResults.updated[0];
+                                message += `${r_type.toUpperCase()}: ${item.ip} `;
+                            }
+                            if (typeResults?.failed?.length > 0) {
+                                failed = true;
+                                const item = typeResults.failed[0];
+                                message += `${r_type.toUpperCase()}失败: ${item.error} `;
+                            }
+                            if (typeResults?.unchanged?.length > 0) {
+                                const item = typeResults.unchanged[0];
+                                message += `${r_type.toUpperCase()}无需更新 `;
+                            }
+                        }
+                        
+                        if (updated && !failed) {
+                            ElMessage.success('首次同步成功: ' + message);
+                        } else if (failed) {
+                            ElMessage.error('首次同步失败: ' + message);
+                        } else {
+                            ElMessage.info('首次同步: ' + message);
+                        }
+                        loadLogs();
+                    } finally {
+                        updating.value = false;
+                    }
+                };
+
+                const toggleDevice = async (device) => {
+                    const originalState = device.enabled;
+                    try {
+                        const res = await fetch(`/api/devices/${device.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ enabled: device.enabled ? 1 : 0 })
+                        });
+                        if (!res.ok) throw new Error('更新失败');
+                        ElMessage.success(device.enabled ? '设备已启用' : '设备已禁用');
+                    } catch (error) {
+                        // 恢复原始状态
+                        device.enabled = originalState;
+                        console.error('切换设备状态失败:', error);
+                        ElMessage.error('切换失败，请重试');
+                    }
+                };
+
+                const updateNow = async (device) => {
+                    deviceUpdating.value[device.id] = true;
+                    device.status = 'updating';
+                    loadDevices();
+                    try {
+                        const res = await fetch(`/api/devices/${device.id}/update`, { method: 'POST' });
+                        const data = await res.json();
+                        
+                        if (data.error) {
+                            ElMessage.error(data.error);
+                            deviceUpdating.value[device.id] = false;
+                            return;
+                        }
+                        
+                        // 检查更新结果
+                        let updated = false;
+                        let failed = false;
+                        let unchanged = false;
+                        let message = '';
+                        
+                        for (const r_type of ['ipv4', 'ipv6']) {
+                            const typeResults = data.results?.[r_type];
+                            if (typeResults?.updated?.length > 0) {
+                                updated = true;
+                                const item = typeResults.updated[0];
+                                message += `${r_type.toUpperCase()}: ${item.ip} `;
+                            }
+                            if (typeResults?.failed?.length > 0) {
+                                failed = true;
+                                const item = typeResults.failed[0];
+                                message += `${r_type.toUpperCase()}失败: ${item.error} `;
+                            }
+                            if (typeResults?.unchanged?.length > 0) {
+                                unchanged = true;
+                                const item = typeResults.unchanged[0];
+                                message += `${r_type.toUpperCase()}: ${item.reason} `;
+                            }
+                        }
+                        
+                        if (updated && !failed) {
+                            ElMessage.success('同步成功: ' + message);
+                        } else if (failed) {
+                            ElMessage.error('同步失败: ' + message);
+                        } else if (unchanged) {
+                            ElMessage.info(message);
+                        } else {
+                            ElMessage.info('无需同步');
+                        }
+                        loadLogs();
+                    } finally {
+                        deviceUpdating.value[device.id] = false;
+                        loadDevices();
+                    }
+                };
+
+                const updateAll = async () => {
+                    updating.value = true;
+                    try {
+                        const res = await fetch('/api/update/now', { method: 'POST' });
+                        const data = await res.json();
+                        
+                        if (data.error) {
+                            ElMessage.error(data.error);
+                            return;
+                        }
+                        
+                        // 统计更新结果
+                        let updatedCount = 0;
+                        let failedCount = 0;
+                        let unchangedCount = 0;
+                        
+                        for (const r_type of ['ipv4', 'ipv6']) {
+                            const typeResults = data.results?.[r_type];
+                            if (typeResults) {
+                                updatedCount += typeResults.updated?.length || 0;
+                                failedCount += typeResults.failed?.length || 0;
+                                unchangedCount += typeResults.unchanged?.length || 0;
+                            }
+                        }
+                        
+                        if (failedCount > 0) {
+                            ElMessage.warning(`同步完成: ${updatedCount} 个成功, ${failedCount} 个失败, ${unchangedCount} 个未变更`);
+                        } else if (updatedCount > 0) {
+                            ElMessage.success(`全部同步成功: ${updatedCount} 个设备`);
+                        } else {
+                            ElMessage.info('所有设备 DNS 记录均为最新');
+                        }
+                        loadLogs();
+                        detectIp();
+                    } finally {
+                        updating.value = false;
+                        loadDevices();
+                    }
+                };
+
+                const deleteDevice = async (device) => {
+                    try {
+                        await ElMessageBox.confirm(`确定要删除设备「${device.device_id}」吗？`, '确认删除', {
+                            confirmButtonText: '删除',
+                            cancelButtonText: '取消',
+                            type: 'warning'
+                        });
+                        
+                        deleting.value[device.id] = true;
+                        await fetch(`/api/devices/${device.id}`, { method: 'DELETE' });
+                        loadDevices();
+                        ElMessage.success('设备已删除');
+                    } catch (e) {
+                        if (e !== 'cancel') {
+                            console.error('删除设备失败:', e);
+                            ElMessage.error('删除设备失败');
+                        }
+                    } finally {
+                        deleting.value[device.id] = false;
+                    }
+                };
+
+                onMounted(async () => {
+                    // 初始化主题（在登录前就可以设置）
+                    initTheme();
+                    
+                    await checkAuth();
+                    if (isLoggedIn.value) {
+                        detectIp();
+                        loadDevices();
+                        loadLogs();
+                        loadConfig();
+                        loadSettings();
+                    }
+                });
+
+                return {
+                    // 登录相关
+                    isLoggedIn, loginForm, loginLoading, doLogin, logout,
+                    // 主题相关
+                    themeMode, toggleTheme,
+                    // 设置相关
+                    showSettings, settingsTab, settings, notifyConfig, passwordForm,
+                    loadSettings, saveSettings, testNotify, changePassword,
+                    // 编辑相关
+                    isEditing, editingDeviceId, editDevice, saveEditDevice,
+                    // 主应用
+                    currentIpv4, currentIpv6, localIpv6, ipv6Source, detecting, updating, deviceUpdating, deleting, config, devices, logs,
+                    dialogVisible, newDevice,
+                    detectIp, saveConfig, loadDevices, showAddDialog, addDevice, updateDeviceById,
+                    toggleDevice, updateNow, updateAll, deleteDevice, copyIp, onIpTypeChange, formatDateTime, clearLogs,
+                    RefreshRight, Upload, Check, Plus, Monitor, Setting, SwitchButton, User, Lock, Delete, Sunny, Moon, Sunrise
+                };
+            }
+        });
+
+        app.use(ElementPlus);
+        for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+            app.component(key, component);
+        }
+        app.mount('#app');
+    </script>
+</body>
+</html>
