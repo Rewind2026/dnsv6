@@ -26,7 +26,9 @@
 
 将项目文件夹复制到目标机器（NAS、服务器等）。
 
+```
 docker pull rewind2030/dnsv6:latest
+```
 
 ### 2. 启动服务
 
